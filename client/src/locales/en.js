@@ -6,6 +6,7 @@ export default {
     orders: 'Orders',
     finance: 'Finance',
     demandForecast: 'Demand Forecast',
+    restocking: 'Restocking',
     companyName: 'Catalyst Components',
     subtitle: 'Inventory Management System'
   },
@@ -106,6 +107,20 @@ export default {
     title: 'Orders',
     description: 'View and manage customer orders',
     allOrders: 'All Orders',
+    submittedOrders: 'Submitted Orders',
+    noSubmittedOrders: 'No restocking orders have been submitted yet',
+    submittedTable: {
+      orderNumber: 'Order #',
+      submitted: 'Submitted',
+      items: 'Items',
+      totalCost: 'Total Cost',
+      leadTime: 'Lead Time (days)',
+      expectedDelivery: 'Expected Delivery',
+      status: 'Status'
+    },
+    submittedStatus: {
+      Submitted: 'Submitted'
+    },
     totalOrders: 'Total Orders',
     totalRevenue: 'Total Revenue',
     avgOrderValue: 'Avg Order Value',
@@ -309,6 +324,64 @@ export default {
     english: 'English',
     japanese: 'Japanese',
     selectLanguage: 'Select Language'
+  },
+
+  // Restocking
+  restocking: {
+    title: 'Restocking',
+    description: 'Set a budget and get recommended purchase quantities, prioritizing items with rising demand',
+    budget: 'Budget',
+    budgetSlider: 'Restocking budget',
+    recommendedTotal: 'Recommended Total',
+    remaining: 'Remaining',
+    recommendedItems: 'Recommended Items',
+    emptyZero: 'Move the slider to set a budget and see recommendations',
+    emptyNoFit: 'No items fit within this budget',
+    table: {
+      sku: 'SKU',
+      name: 'Item',
+      trend: 'Trend',
+      demandGap: 'Demand Gap',
+      quantity: 'Recommended Qty',
+      unitCost: 'Unit Cost',
+      lineTotal: 'Line Total',
+      leadTime: 'Lead Time (days)'
+    },
+    trend: {
+      increasing: 'Increasing',
+      stable: 'Stable',
+      decreasing: 'Decreasing'
+    },
+    placeOrder: 'Place Order',
+    submitting: 'Submitting...',
+    success: 'Order {orderNumber} submitted. Expected delivery: {date}',
+    failed: 'Failed to place order',
+    loadFailed: 'Failed to load recommendations'
+  },
+
+  // Purchase Orders
+  purchaseOrder: {
+    create: 'Create PO',
+    view: 'View PO',
+    createTitle: 'Create Purchase Order',
+    viewTitle: 'Purchase Order',
+    item: 'Item',
+    sku: 'SKU',
+    shortage: 'Shortage',
+    units: 'units',
+    supplier: 'Supplier',
+    quantity: 'Quantity',
+    unitCost: 'Unit Cost',
+    total: 'Total',
+    expectedDelivery: 'Expected Delivery',
+    notes: 'Notes',
+    poId: 'PO ID',
+    status: 'Status',
+    createdDate: 'Created',
+    submit: 'Create Purchase Order',
+    submitting: 'Creating...',
+    createFailed: 'Failed to create purchase order',
+    loadFailed: 'Failed to load purchase order'
   },
 
   // Common

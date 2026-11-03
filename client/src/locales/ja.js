@@ -6,6 +6,7 @@ export default {
     orders: '注文',
     finance: '財務',
     demandForecast: '需要予測',
+    restocking: '補充発注',
     companyName: '触媒コンポーネンツ',
     subtitle: '在庫管理システム'
   },
@@ -106,6 +107,20 @@ export default {
     title: '注文',
     description: '顧客注文の表示と管理',
     allOrders: 'すべての注文',
+    submittedOrders: '提出済み発注',
+    noSubmittedOrders: '提出済みの補充発注はまだありません',
+    submittedTable: {
+      orderNumber: '発注番号',
+      submitted: '提出日',
+      items: '品目',
+      totalCost: '合計費用',
+      leadTime: 'リードタイム（日）',
+      expectedDelivery: '納品予定日',
+      status: 'ステータス'
+    },
+    submittedStatus: {
+      Submitted: '提出済み'
+    },
     totalOrders: '総注文数',
     totalRevenue: '総収益',
     avgOrderValue: '平均注文額',
@@ -309,6 +324,64 @@ export default {
     english: 'English',
     japanese: '日本語',
     selectLanguage: '言語を選択'
+  },
+
+  // Restocking
+  restocking: {
+    title: '補充発注',
+    description: '予算を設定すると、需要が増加している品目を優先した推奨発注数量が表示されます',
+    budget: '予算',
+    budgetSlider: '補充発注の予算',
+    recommendedTotal: '推奨合計',
+    remaining: '残予算',
+    recommendedItems: '推奨品目',
+    emptyZero: 'スライダーで予算を設定すると推奨が表示されます',
+    emptyNoFit: 'この予算に収まる品目はありません',
+    table: {
+      sku: 'SKU',
+      name: '品目',
+      trend: 'トレンド',
+      demandGap: '需要ギャップ',
+      quantity: '推奨数量',
+      unitCost: '単価',
+      lineTotal: '小計',
+      leadTime: 'リードタイム（日）'
+    },
+    trend: {
+      increasing: '増加',
+      stable: '安定',
+      decreasing: '減少'
+    },
+    placeOrder: '発注する',
+    submitting: '送信中...',
+    success: '発注 {orderNumber} を提出しました。納品予定日：{date}',
+    failed: '発注に失敗しました',
+    loadFailed: '推奨の読み込みに失敗しました'
+  },
+
+  // Purchase Orders
+  purchaseOrder: {
+    create: '発注作成',
+    view: '発注表示',
+    createTitle: '発注書の作成',
+    viewTitle: '発注書',
+    item: '品目',
+    sku: 'SKU',
+    shortage: '不足数',
+    units: '個',
+    supplier: '仕入先',
+    quantity: '数量',
+    unitCost: '単価',
+    total: '合計',
+    expectedDelivery: '納品予定日',
+    notes: '備考',
+    poId: '発注ID',
+    status: 'ステータス',
+    createdDate: '作成日',
+    submit: '発注書を作成',
+    submitting: '作成中...',
+    createFailed: '発注書の作成に失敗しました',
+    loadFailed: '発注書の読み込みに失敗しました'
   },
 
   // Common

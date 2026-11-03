@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from datetime import datetime, timedelta
+from itertools import count
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
 
 app = FastAPI(title="Factory Inventory Management System")
@@ -89,6 +91,8 @@ class DemandForecast(BaseModel):
     forecasted_demand: int
     trend: str
     period: str
+    unit_cost: float
+    lead_time_days: int
 
 class BacklogItem(BaseModel):
     id: str
@@ -114,11 +118,121 @@ class PurchaseOrder(BaseModel):
 
 class CreatePurchaseOrderRequest(BaseModel):
     backlog_item_id: str
-    supplier_name: str
-    quantity: int
-    unit_cost: float
+    supplier_name: str = Field(min_length=1)
+    quantity: int = Field(gt=0)
+    unit_cost: float = Field(gt=0)
     expected_delivery_date: str
     notes: Optional[str] = None
+
+class Task(BaseModel):
+    id: str
+    title: str
+    priority: str
+    dueDate: str
+    status: str
+
+class CreateTaskRequest(BaseModel):
+    title: str = Field(min_length=1)
+    priority: str = Field(pattern='^(high|medium|low)$')
+    dueDate: str
+
+class RestockRecommendation(BaseModel):
+    item_sku: str
+    item_name: str
+    trend: str
+    demand_gap: int
+    recommended_quantity: int
+    unit_cost: float
+    line_total: float
+    lead_time_days: int
+
+class RestockRecommendationResponse(BaseModel):
+    budget: float
+    total_cost: float
+    remaining_budget: float
+    items: List[RestockRecommendation]
+
+class RestockOrderLineRequest(BaseModel):
+    item_sku: str
+    quantity: int = Field(gt=0)
+
+class CreateRestockOrderRequest(BaseModel):
+    budget: float = Field(gt=0)
+    items: List[RestockOrderLineRequest] = Field(min_length=1)
+
+class RestockOrderLine(BaseModel):
+    item_sku: str
+    item_name: str
+    quantity: int
+    unit_cost: float
+    line_total: float
+    lead_time_days: int
+
+class RestockOrder(BaseModel):
+    id: str
+    order_number: str
+    status: str
+    budget: float
+    total_cost: float
+    items: List[RestockOrderLine]
+    lead_time_days: int
+    submitted_date: str
+    expected_delivery_date: str
+
+# Submitted restocking orders live only in process memory, like the rest of the mock data
+restock_orders: List[dict] = []
+
+# Tasks created from the profile menu; also in-memory only. The client merges these with
+# its own mock tasks (integer ids), so these use "TASK-n" string ids to avoid collisions.
+tasks: List[dict] = []
+# Monotonic counter rather than len(tasks) + 1, which would reuse an id after a delete
+task_ids = count(1)
+
+# Increasing demand is restocked before stable/decreasing demand
+TREND_PRIORITY = {'increasing': 0, 'stable': 1, 'decreasing': 2}
+
+def recommend_restock(budget: float) -> dict:
+    """Pick forecast items to restock within a budget.
+
+    Items with no positive demand gap (forecasted minus current) need no restock.
+    The rest are ranked by trend, then by largest gap, and filled greedily; when an
+    item no longer fits in full, the remaining budget buys as many units as it can.
+    """
+    candidates = []
+    for forecast in demand_forecasts:
+        gap = forecast['forecasted_demand'] - forecast['current_demand']
+        if gap > 0:
+            candidates.append((forecast, gap))
+    candidates.sort(key=lambda c: (TREND_PRIORITY.get(c[0]['trend'], 99), -c[1]))
+
+    remaining = budget
+    items = []
+    for forecast, gap in candidates:
+        unit_cost = forecast['unit_cost']
+        # Floor division so the partial line never exceeds the remaining budget
+        quantity = min(gap, int(remaining // unit_cost))
+        if quantity <= 0:
+            # Keep scanning: a cheaper item further down may still fit
+            continue
+        line_total = round(quantity * unit_cost, 2)
+        remaining = round(remaining - line_total, 2)
+        items.append({
+            'item_sku': forecast['item_sku'],
+            'item_name': forecast['item_name'],
+            'trend': forecast['trend'],
+            'demand_gap': gap,
+            'recommended_quantity': quantity,
+            'unit_cost': unit_cost,
+            'line_total': line_total,
+            'lead_time_days': forecast['lead_time_days'],
+        })
+
+    return {
+        'budget': budget,
+        'total_cost': round(budget - remaining, 2),
+        'remaining_budget': remaining,
+        'items': items,
+    }
 
 # API endpoints
 @app.get("/")
@@ -165,6 +279,124 @@ def get_order(order_id: str):
 def get_demand_forecasts():
     """Get demand forecasts"""
     return demand_forecasts
+
+@app.get("/api/restocking/recommendations", response_model=RestockRecommendationResponse)
+def get_restock_recommendations(budget: float = Query(gt=0)):
+    """Recommend forecast items to restock within the given budget"""
+    return recommend_restock(budget)
+
+@app.get("/api/restocking/orders", response_model=List[RestockOrder])
+def get_restock_orders():
+    """Get submitted restocking orders, newest first"""
+    return list(reversed(restock_orders))
+
+@app.post("/api/restocking/orders", response_model=RestockOrder, status_code=201)
+def create_restock_order(request: CreateRestockOrderRequest):
+    """Submit a restocking order"""
+    forecasts_by_sku = {f['item_sku']: f for f in demand_forecasts}
+
+    lines = []
+    for line in request.items:
+        forecast = forecasts_by_sku.get(line.item_sku)
+        if not forecast:
+            raise HTTPException(status_code=400, detail=f"Unknown SKU {line.item_sku}")
+        # Prices come from server data, never from the client
+        lines.append({
+            'item_sku': forecast['item_sku'],
+            'item_name': forecast['item_name'],
+            'quantity': line.quantity,
+            'unit_cost': forecast['unit_cost'],
+            'line_total': round(line.quantity * forecast['unit_cost'], 2),
+            'lead_time_days': forecast['lead_time_days'],
+        })
+
+    total_cost = round(sum(l['line_total'] for l in lines), 2)
+    if total_cost > request.budget:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order total {total_cost} exceeds budget {request.budget}"
+        )
+
+    # The order arrives in one shipment, so it waits for its slowest item
+    lead_time_days = max(l['lead_time_days'] for l in lines)
+    submitted = datetime.now()
+    order_index = len(restock_orders) + 1
+    order = {
+        'id': f"RST-{order_index}",
+        'order_number': f"RST-{submitted.year}-{order_index:04d}",
+        'status': 'Submitted',
+        'budget': request.budget,
+        'total_cost': total_cost,
+        'items': lines,
+        'lead_time_days': lead_time_days,
+        'submitted_date': submitted.isoformat(timespec='seconds'),
+        'expected_delivery_date': (submitted + timedelta(days=lead_time_days)).date().isoformat(),
+    }
+    restock_orders.append(order)
+    return order
+
+@app.get("/api/tasks", response_model=List[Task])
+def get_tasks():
+    """Get tasks, newest first (the client prepends new tasks, so this keeps the order stable)"""
+    return list(reversed(tasks))
+
+@app.post("/api/tasks", response_model=Task, status_code=201)
+def create_task(request: CreateTaskRequest):
+    """Create a pending task"""
+    task = {
+        'id': f"TASK-{next(task_ids)}",
+        'title': request.title.strip(),
+        'priority': request.priority,
+        'dueDate': request.dueDate,
+        'status': 'pending',
+    }
+    tasks.append(task)
+    return task
+
+def find_task(task_id: str) -> dict:
+    task = next((t for t in tasks if t['id'] == task_id), None)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(task_id: str):
+    """Delete a task"""
+    tasks.remove(find_task(task_id))
+    return {"deleted": task_id}
+
+@app.patch("/api/tasks/{task_id}", response_model=Task)
+def toggle_task(task_id: str):
+    """Toggle a task between pending and completed"""
+    task = find_task(task_id)
+    task['status'] = 'completed' if task['status'] == 'pending' else 'pending'
+    return task
+
+@app.post("/api/purchase-orders", response_model=PurchaseOrder, status_code=201)
+def create_purchase_order(request: CreatePurchaseOrderRequest):
+    """Create a purchase order for a backlog item (one per item)"""
+    if not any(b['id'] == request.backlog_item_id for b in backlog_items):
+        raise HTTPException(status_code=404, detail=f"Backlog item {request.backlog_item_id} not found")
+    if any(po['backlog_item_id'] == request.backlog_item_id for po in purchase_orders):
+        raise HTTPException(status_code=400, detail=f"Backlog item {request.backlog_item_id} already has a purchase order")
+
+    po = {
+        **request.model_dump(),
+        'id': f"PO-{len(purchase_orders) + 1:04d}",
+        'status': 'Pending',
+        'created_date': datetime.now().isoformat(timespec='seconds'),
+    }
+    # Appending to the shared list makes /api/backlog report has_purchase_order for this item
+    purchase_orders.append(po)
+    return po
+
+@app.get("/api/purchase-orders/{backlog_item_id}", response_model=PurchaseOrder)
+def get_purchase_order_by_backlog_item(backlog_item_id: str):
+    """Get the purchase order raised for a backlog item"""
+    po = next((p for p in purchase_orders if p['backlog_item_id'] == backlog_item_id), None)
+    if not po:
+        raise HTTPException(status_code=404, detail=f"No purchase order found for backlog item {backlog_item_id}")
+    return po
 
 @app.get("/api/backlog", response_model=List[BacklogItem])
 def get_backlog():
@@ -220,7 +452,13 @@ def get_monthly_spending():
 @app.get("/api/spending/categories")
 def get_category_spending():
     """Get spending by category"""
-    return category_spending
+    # Derive each share from the amounts so the percentages always sum to ~100%,
+    # instead of trusting the stored values (which had drifted to 123.6% in total)
+    total = sum(c['amount'] for c in category_spending)
+    return [
+        {**c, 'percentage': round(c['amount'] / total * 100, 1) if total else 0}
+        for c in category_spending
+    ]
 
 @app.get("/api/spending/transactions")
 def get_recent_transactions():
