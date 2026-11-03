@@ -29,6 +29,42 @@
 
       <div class="card">
         <div class="card-header">
+          <h3 class="card-title">{{ t('orders.submittedOrders') }} ({{ restockOrders.length }})</h3>
+        </div>
+        <div v-if="restockError" class="error">{{ restockError }}</div>
+        <div v-else-if="restockOrders.length === 0" class="empty-state">{{ t('orders.noSubmittedOrders') }}</div>
+        <div v-else class="table-container">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">{{ t('orders.submittedTable.orderNumber') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.submitted') }}</th>
+                <th class="col-items">{{ t('orders.submittedTable.items') }}</th>
+                <th class="col-value">{{ t('orders.submittedTable.totalCost') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.leadTime') }}</th>
+                <th class="col-date">{{ t('orders.submittedTable.expectedDelivery') }}</th>
+                <th class="col-status">{{ t('orders.submittedTable.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockOrders" :key="order.id">
+                <td class="col-order-number"><strong>{{ order.order_number }}</strong></td>
+                <td class="col-date">{{ formatDate(order.submitted_date) }}</td>
+                <td class="col-items">{{ t('orders.itemsCount', { count: order.items.length }) }}</td>
+                <td class="col-value"><strong>{{ formatCurrencyWithDecimals(order.total_cost, currentCurrency, 2) }}</strong></td>
+                <td class="col-date">{{ order.lead_time_days }}</td>
+                <td class="col-date">{{ formatDate(order.expected_delivery_date) }}</td>
+                <td class="col-status">
+                  <span class="badge info">{{ t('orders.submittedStatus.' + order.status) }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
           <h3 class="card-title">{{ t('orders.allOrders') }} ({{ orders.length }})</h3>
         </div>
         <div class="table-container">
@@ -83,6 +119,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+import { formatCurrencyWithDecimals } from '../utils/currency'
 
 export default {
   name: 'Orders',
@@ -95,6 +132,9 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+    // Restocking orders are independent of the global filters
+    const restockOrders = ref([])
+    const restockError = ref(null)
 
     // Use shared filters
     const {
@@ -153,7 +193,19 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    const loadRestockOrders = async () => {
+      try {
+        restockError.value = null
+        restockOrders.value = await api.getRestockOrders()
+      } catch (err) {
+        restockError.value = 'Failed to load submitted orders: ' + err.message
+      }
+    }
+
+    onMounted(() => {
+      loadOrders()
+      loadRestockOrders()
+    })
 
     return {
       t,
@@ -164,6 +216,10 @@ export default {
       getOrderStatusClass,
       formatDate,
       currencySymbol,
+      currentCurrency,
+      formatCurrencyWithDecimals,
+      restockOrders,
+      restockError,
       translateProductName,
       translateCustomerName
     }
@@ -275,5 +331,12 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #64748b;
+  font-size: 0.938rem;
 }
 </style>

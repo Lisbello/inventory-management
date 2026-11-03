@@ -99,25 +99,25 @@
     {
       "category": "Raw Materials",
       "amount": 2562000,
-      "percentage": 42.5,
+      "percentage": 29.4,
       "change": 15.2
     },
     {
       "category": "Components",
       "amount": 2946000,
-      "percentage": 38.8,
+      "percentage": 33.8,
       "change": 10.5
     },
     {
       "category": "Equipment",
       "amount": 1442400,
-      "percentage": 19.0,
+      "percentage": 16.5,
       "change": 8.3
     },
     {
       "category": "Consumables",
       "amount": 1767000,
-      "percentage": 23.3,
+      "percentage": 20.3,
       "change": 12.7
     }
   ]
